@@ -239,6 +239,7 @@ System.Drawing). Любые свои `.glb`/`.gltf` кладутся в `assets/
 |---|---|---|
 | Силуэты | `/tools/silhouettes.html` | обводит модели пака, отдаёт `contours.json` и плавники поверх тела |
 | Листы | `node tools/make-coloring.js` | собирает 12 листов A4 на трёх языках и манифест |
+| PDF | `node tools/make-pdf.js` | печатает листы в `raskraski.<язык>.pdf` через headless Chrome; запускать после make-coloring |
 | Проверка съёмки | `/tools/test-capture.html` | прогоняет каждый лист с перекосом, поворотом и шумом |
 | Сборка пака | `tools/convert-pack.ps1` | FBX из купленного архива → glTF |
 

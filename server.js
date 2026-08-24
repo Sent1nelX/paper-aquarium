@@ -378,6 +378,7 @@ const MIME = {
   '.gltf': 'model/gltf+json',
   '.wasm': 'application/wasm',
   '.md': 'text/markdown; charset=utf-8',
+  '.pdf': 'application/pdf',
   '.ico': 'image/x-icon'
 };
 
@@ -914,10 +915,32 @@ function cacheControl(ext, url) {
   return 'public, max-age=86400';
 }
 
+// Короткий адрес для чатов и описаний: /raskraski.pdf ведёт на PDF со всеми
+// листами на языке браузера. Логика выбора та же, что в i18n.js: соседям по
+// алфавиту — русский, всем прочим — английский.
+function coloringPdf(req) {
+  const codes = String(req.headers['accept-language'] || '')
+    .split(',').map((p) => p.trim().slice(0, 2).toLowerCase());
+  for (const code of codes) {
+    if (code === 'ru' || code === 'en' || code === 'pl') return code;
+    if (code === 'be' || code === 'uk' || code === 'kk') return 'ru';
+  }
+  return 'en';
+}
+
 http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split('?')[0]);
 
   if (url.startsWith('/api/')) return handleApi(req, res, url);
+
+  if (url === '/raskraski.pdf') {
+    res.writeHead(302, {
+      Location: '/assets/coloring/raskraski.' + coloringPdf(req) + '.pdf',
+      'Cache-Control': 'no-store',
+      Vary: 'Accept-Language'
+    });
+    return res.end();
+  }
 
   const page = pageFor(url);
   let file = page ? path.join(ROOT, page) : staticFor(url);

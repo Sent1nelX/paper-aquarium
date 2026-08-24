@@ -8,7 +8,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "coloring": "node tools/make-coloring.js"
+    "coloring": "node tools/make-coloring.js",
+    "pdf": "node tools/make-pdf.js"
   },
   "engines": {
     "node": ">=18"

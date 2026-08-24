@@ -250,6 +250,7 @@ conversion pitfalls are in
 |---|---|---|
 | Silhouettes | `/tools/silhouettes.html` | traces the pack models, produces `contours.json` and the fins drawn over the body |
 | Sheets | `node tools/make-coloring.js` | builds 12 A4 sheets in three languages plus the manifest |
+| PDF | `node tools/make-pdf.js` | prints the sheets into `raskraski.<lang>.pdf` via headless Chrome; run after make-coloring |
 | Capture test | `/tools/test-capture.html` | runs every sheet through skew, rotation and noise |
 | Pack build | `tools/convert-pack.ps1` | FBX from the purchased archive → glTF |
 

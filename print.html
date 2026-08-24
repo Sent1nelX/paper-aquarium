@@ -13,6 +13,9 @@
   }
   .top h1 { font-size: 16px; margin: 0; flex: 1; }
   .top a { color: #58d6ff; text-decoration: none; font-size: 13px; }
+  .top a.pdf {
+    border: 1px solid #58d6ff; border-radius: 8px; padding: 6px 13px;
+  }
   button {
     cursor: pointer; font: inherit; font-size: 13px;
     background: #58d6ff; border: 0; border-radius: 8px; padding: 7px 14px;
@@ -34,7 +37,7 @@
   body.embed { background: none; }
   body.embed .top { position: static; background: none; padding: 4px 2px 0; }
   body.embed .top h1 { font-size: 15px; }
-  body.embed .top a { display: none; }
+  body.embed .top a.home { display: none; }
   body.embed .wrap { padding: 14px 2px 6px; }
   body.embed .sheet { box-shadow: 0 8px 24px rgba(0,0,0,.4); }
 
@@ -72,7 +75,8 @@
 <body>
 <div class="top">
   <h1 data-t="print.title"></h1>
-  <a href="/" data-t="print.home"></a>
+  <a href="/" class="home" data-t="print.home"></a>
+  <a class="pdf" id="pdfLink" download data-t="print.pdf"></a>
   <button onclick="document.body.classList.remove('one'); print()" data-t="print.all"></button>
 </div>
 <div class="wrap">
@@ -83,10 +87,30 @@
 </div>
 <script src="/assets/i18n.js"></script>
 <script>
+var Q = new URLSearchParams(location.search);
+
 // Врезка в меню аквариума: своя подложка не нужна, а высоту надо сообщать
 // наружу — карточка меню сама её не угадает.
-var EMBED = new URLSearchParams(location.search).has('embed');
+var EMBED = Q.has('embed');
 if (EMBED) document.body.classList.add('embed');
+
+// ?lang= — для ссылок на конкретный язык и для генератора PDF: у headless
+// Chrome нет ни localStorage с выбором, ни нужного navigator.language.
+if (Q.get('lang')) I18N.set(Q.get('lang'));
+
+// Генератор печатает страницу целиком, не прокручивая, — ленивые картинки
+// ниже экрана так и не загрузятся, и в PDF уедут пустые листы.
+var PDF = Q.has('pdf');
+
+// Готовый PDF собран генератором точно под A4 — в нём метки заведомо
+// правильного размера, в отличие от «Сохранить как PDF» с чужими полями.
+var pdfLink = document.getElementById('pdfLink');
+function repdf() {
+  pdfLink.href = '/assets/coloring/raskraski.' + I18N.lang + '.pdf';
+  pdfLink.setAttribute('download', I18N.t('print.pdf.file'));
+}
+repdf();
+addEventListener('aqua:lang', repdf);
 
 // Открытое окно подтверждения бывает выше содержимого страницы — тогда
 // врезке нужна его высота, иначе окно срежется по краям.
@@ -149,7 +173,7 @@ fetch('/assets/coloring/manifest.json')
 
       var img = document.createElement('img');
       img.className = 'sheet';
-      img.loading = 'lazy';
+      img.loading = PDF ? 'eager' : 'lazy';
 
       var retitle = function () {
         b.textContent = img.alt = titleOf(f);

@@ -248,9 +248,11 @@
       'print.title': 'Раскраски — шаблоны для печати',
       'print.home': '← мои аквариумы',
       'print.all': 'Печать всех',
+      'print.pdf': 'Скачать PDF',
+      'print.pdf.file': 'раскраски-аквариум.pdf',
       'print.one': 'Печать этого листа',
       'print.note': 'Печатай на обычной А4 в альбомной ориентации, масштаб 100% (без «вписать в страницу») — размеры меток важны для распознавания. Чёрные квадраты в углах не закрашивать!',
-      'print.note2': 'Принтера рядом нет? В окне печати выбери «Сохранить как PDF» — файл можно отправить туда, где принтер найдётся. А пока запусти в аквариум готовую рыбку из меню.',
+      'print.note2': 'Принтера рядом нет? Скачай все листы одним PDF (кнопка вверху) и отправь туда, где принтер найдётся. А пока запусти в аквариум готовую рыбку из меню.',
       'print.nomanifest': 'Не загрузился manifest.json — проверь, что сервер запущен.',
 
       // ── общее ──
@@ -480,9 +482,11 @@
       'print.title': 'Colouring sheets — ready to print',
       'print.home': '← my aquariums',
       'print.all': 'Print all',
+      'print.pdf': 'Download PDF',
+      'print.pdf.file': 'aquarium-colouring-sheets.pdf',
       'print.one': 'Print this sheet',
       'print.note': 'Print on plain A4 in landscape at 100% scale (not “fit to page”) — the marker size matters for recognition. Do not colour the black squares in the corners!',
-      'print.note2': 'No printer around? Pick “Save as PDF” in the print dialog — the file can travel to wherever a printer lives. Meanwhile, release a ready-made fish from the menu.',
+      'print.note2': 'No printer around? Download all sheets as one PDF (button up top) and send it wherever a printer lives. Meanwhile, release a ready-made fish from the menu.',
       'print.nomanifest': 'manifest.json did not load — check that the server is running.',
 
       'pass.ask.title': 'Aquarium password',
@@ -711,9 +715,11 @@
       'print.title': 'Kolorowanki — szablony do druku',
       'print.home': '← moje akwaria',
       'print.all': 'Drukuj wszystkie',
+      'print.pdf': 'Pobierz PDF',
+      'print.pdf.file': 'kolorowanki-akwarium.pdf',
       'print.one': 'Drukuj tę kartkę',
       'print.note': 'Drukuj na zwykłym A4 poziomo, w skali 100% (bez „dopasuj do strony”) — rozmiar znaczników jest ważny dla rozpoznawania. Czarnych kwadratów w rogach nie kolorujemy!',
-      'print.note2': 'Nie ma drukarki pod ręką? W oknie drukowania wybierz „Zapisz jako PDF” — plik dojedzie tam, gdzie drukarka jest. A na razie wypuść z menu gotową rybkę.',
+      'print.note2': 'Nie ma drukarki pod ręką? Pobierz wszystkie kartki jednym plikiem PDF (przycisk u góry) i wyślij tam, gdzie drukarka jest. A na razie wypuść z menu gotową rybkę.',
       'print.nomanifest': 'Nie wczytał się manifest.json — sprawdź, czy serwer działa.',
 
       'pass.ask.title': 'Hasło akwarium',
