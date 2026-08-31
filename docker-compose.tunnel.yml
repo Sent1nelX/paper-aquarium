@@ -1,0 +1,59 @@
+# Аквариум за Cloudflare Tunnel — без своего 80/443 и без внешнего прокси.
+# Годится для сервера, где порты уже заняты (или наружу их нет вовсе):
+# наружу торчит только исходящее соединение cloudflared к краю Cloudflare,
+# HTTPS и сертификат — там же. Своего Traefik/Caddy проект тут не требует.
+#
+# Что нужно рядом с этим файлом:
+#   cloudflared/config.yml         — ingress: ВАШ.ДОМЕН → http://aqua:8000
+#   cloudflared/<tunnel-id>.json   — креды туннеля (cloudflared tunnel create)
+#   data/                          — аквариумы (создаётся сам; chown 1000:1000)
+#   pack/                          — пак моделей (в git нет; монтируется только чтение)
+#
+# Пошагово — см. DEPLOY.md, раздел «За Cloudflare Tunnel».
+#   docker compose -f docker-compose.tunnel.yml up -d --build
+
+services:
+  aqua:
+    build: .
+    image: aqua:latest
+    container_name: aqua
+    restart: unless-stopped
+    environment:
+      # Пределы на случай, когда ссылку узнал кто-то лишний. Подробности —
+      # в LIMITS в server.js.
+      AQUA_MAX_TANKS: ${AQUA_MAX_TANKS:-200}
+      AQUA_TANKS_PER_HOUR: ${AQUA_TANKS_PER_HOUR:-5}
+      AQUA_MAX_FISH: ${AQUA_MAX_FISH:-40}
+      AQUA_MAX_BG: ${AQUA_MAX_BG:-8}
+      AQUA_MAX_DATA_MB: ${AQUA_MAX_DATA_MB:-2048}
+      # Аквариум-витрина для кнопки «Посмотреть живой аквариум». Пусто — нет кнопки.
+      AQUA_DEMO_TANK: ${AQUA_DEMO_TANK:-}
+    volumes:
+      # Аквариумы переживают пересборку образа. Обычная папка, а не том:
+      # внутри детские рисунки, и бэкап их архивом проще, чем через docker.
+      - ./data:/app/data
+      # Купленный пак: лежит на сервере, в git его нет. Только чтение.
+      - ./pack:/app/assets/models/pack:ro
+    expose:
+      - "8000"
+    networks:
+      - aquanet
+
+  # Туннель: публикует домен наружу (HTTPS на крае Cloudflare) и ходит к aqua
+  # по внутренней сети aqua_net. Свой туннель на этот проект — он независим
+  # от других сервисов на том же сервере: перезапуск одного не роняет остальных.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: aqua-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - aqua
+    networks:
+      - aquanet
+
+networks:
+  aquanet:
+    name: aqua_net

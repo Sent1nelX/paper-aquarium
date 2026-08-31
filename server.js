@@ -75,9 +75,17 @@ const LIMITS = {
   dataMB: Number(process.env.AQUA_MAX_DATA_MB) || 2048       // вся папка data
 };
 
-// Адрес клиента: за обратным прокси настоящий приходит в X-Forwarded-For,
-// напрямую — в сокете. Ключ нужен только для счётчика, точность не важна.
+// Адрес клиента для счётчиков-лимитов. Порядок важен именно из-за подделки:
+//   1. CF-Connecting-IP — за Cloudflare настоящий адрес клиента, и подделать
+//      его нельзя: заголовок ставит край CF, клиентский он перезатирает.
+//   2. X-Forwarded-For — за обычным прокси; НО первый элемент клиент может
+//      прислать сам (прокси лишь дописывает свой хвостом), поэтому как ключ
+//      от перебора он слабее — берём только когда CF-заголовка нет.
+//   3. Сокет — прямое подключение без прокси.
+// Точность адреса тут не нужна, важно, чтобы его нельзя было дёшево крутить.
 function clientKey(req) {
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  if (cf) return cf;
   const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   return fwd || req.socket.remoteAddress || '?';
 }
@@ -159,6 +167,16 @@ function ensureTank(t) {
   fs.mkdirSync(t.fish, { recursive: true });
   fs.mkdirSync(t.trash, { recursive: true });
   fs.mkdirSync(t.backgrounds, { recursive: true });
+}
+
+// Запись через временный файл + rename: rename на одной ФС атомарен, поэтому
+// читатель видит либо старый файл целиком, либо новый целиком — но не обрубок.
+// Важно для meta.json: креш посреди обычного writeFileSync оставил бы битую
+// мету, аквариум потерял бы соль с хешем пароля и стал открытым для всех.
+function writeJsonAtomic(file, data) {
+  const tmp = file + '.tmp-' + process.pid + '-' + Date.now();
+  fs.writeFileSync(tmp, typeof data === 'string' ? data : JSON.stringify(data));
+  fs.renameSync(tmp, file);
 }
 
 function readMeta(t) {
@@ -523,7 +541,7 @@ function readSettings(t) {
 
 function writeSettings(t, s) {
   ensureTank(t);
-  fs.writeFileSync(t.settings, JSON.stringify(s));
+  writeJsonAtomic(t.settings, s);
 }
 
 // ── API внутри аквариума ───────────────────────────────────────────────────
@@ -590,7 +608,7 @@ function handleTankApi(req, res, t, url) {
       meta.salt = crypto.randomBytes(16).toString('hex');
       meta.hash = hashPass(pass, meta.salt);
       ensureTank(t);
-      fs.writeFileSync(t.meta, JSON.stringify(meta));
+      writeJsonAtomic(t.meta, meta);
       console.log(`пароль аквариума ${t.id} изменён`);
       send(res, 200, JSON.stringify({ ok: true }));
     });
@@ -602,7 +620,7 @@ function handleTankApi(req, res, t, url) {
       const meta = readMeta(t);
       meta.name = String(data.name || '').trim().slice(0, 60) || meta.name;
       ensureTank(t);
-      fs.writeFileSync(t.meta, JSON.stringify(meta));
+      writeJsonAtomic(t.meta, meta);
       send(res, 200, JSON.stringify(publicMeta(meta)));
     });
   }
@@ -838,7 +856,7 @@ function handleApi(req, res, url) {
         salt,
         hash: hashPass(pass, salt)
       };
-      fs.writeFileSync(t.meta, JSON.stringify(meta));
+      writeJsonAtomic(t.meta, meta);
       // Новый аквариум сразу с картинкой: какая достанется — дело случая.
       const background = randomBackground();
       writeSettings(t, { background });
@@ -940,6 +958,9 @@ function coloringPdf(req) {
 
 http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split('?')[0]);
+
+  // Проба живости для докера/прокси: дешёвая, без чтения диска и рендера.
+  if (url === '/healthz') return send(res, 200, '{"ok":true}');
 
   if (url.startsWith('/api/')) return handleApi(req, res, url);
 

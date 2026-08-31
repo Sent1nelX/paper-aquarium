@@ -36,3 +36,9 @@ desktop.ini
 .DS_Store
 *.swp
 node_modules/
+
+# ── Cloudflare Tunnel: креды и живой конфиг конкретного сервера ──────────────
+# Секрет туннеля (<id>.json) и config.yml с реальным доменом — только на сервере.
+# Рядом лежит шаблон cloudflared/config.example.yml, он в историю идёт.
+cloudflared/*.json
+cloudflared/config.yml

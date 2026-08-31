@@ -1,0 +1,18 @@
+# Шаблон. Скопировать в cloudflared/config.yml и подставить свой tunnel id
+# и домен. Живой config.yml и креды-json в git не идут (см. .gitignore).
+#
+# Один раз на сервере:
+#   cloudflared tunnel login                  # авторизация в аккаунте Cloudflare
+#   cloudflared tunnel create aqua            # → пишет <id>.json в ~/.cloudflared
+#   cp ~/.cloudflared/<id>.json cloudflared/  # положить рядом с config.yml
+#   chmod 644 cloudflared/<id>.json           # контейнер cloudflared читает как uid 65532
+#   cloudflared tunnel route dns aqua ВАШ.ДОМЕН
+tunnel: 00000000-0000-0000-0000-000000000000
+credentials-file: /etc/cloudflared/00000000-0000-0000-0000-000000000000.json
+ingress:
+  - hostname: example.com
+    service: http://aqua:8000
+  - hostname: www.example.com
+    service: http://aqua:8000
+  # Всё прочее — заглушка 404 (обязательный последний пункт).
+  - service: http_status:404

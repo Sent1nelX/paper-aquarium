@@ -190,3 +190,57 @@ docker network create web
 Дальше любой гайд по Traefik + Let's Encrypt: аквариуму нужны только
 внешняя сеть `web`, entrypoint `websecure` и резолвер с именем
 `letsencrypt` — имена зашиты в лейблы и меняются там же.
+
+## За Cloudflare Tunnel (без своего прокси)
+
+Если у домена DNS на Cloudflare, а на сервере нет открытых портов (или 80/443
+уже заняты), аквариум поднимается вообще без Traefik/Caddy: `cloudflared`
+держит исходящее соединение к краю Cloudflare, а HTTPS и сертификат — там же.
+Файл — `docker-compose.tunnel.yml`, туннель ведёт прямо в `aqua:8000`.
+
+```bash
+# 1. Код и папки
+git clone https://github.com/Sent1nelX/paper-aquarium.git /home/$USER/apps/paper-aquarium
+cd /home/$USER/apps/paper-aquarium
+mkdir -p data pack && sudo chown -R 1000:1000 data pack
+
+# 2. Туннель (один раз)
+cloudflared tunnel login                          # авторизация в аккаунте Cloudflare
+cloudflared tunnel create aqua                    # → пишет <id>.json в ~/.cloudflared
+cp ~/.cloudflared/<id>.json cloudflared/          # креды рядом с конфигом
+chmod 644 cloudflared/<id>.json                   # контейнер cloudflared читает как uid 65532
+cp cloudflared/config.example.yml cloudflared/config.yml
+nano cloudflared/config.yml                        # tunnel: <id>, hostname: ВАШ.ДОМЕН
+cloudflared tunnel route dns aqua ВАШ.ДОМЕН        # DNS-запись CNAME на туннель
+
+# 3. Запуск
+docker compose -f docker-compose.tunnel.yml up -d --build
+docker compose -f docker-compose.tunnel.yml logs -f
+```
+
+Обновление и статус — те же команды, что и выше, только с
+`-f docker-compose.tunnel.yml`. Автозапуск после ребута обеспечивают
+`restart: unless-stopped` + включённый в systemd docker — отдельный unit не нужен.
+
+Настоящий адрес посетителя за Cloudflare приходит в `CF-Connecting-IP`
+(подделать нельзя — заголовок ставит край CF), и счётчики лимитов берут его:
+`X-Forwarded-For` за туннелем клиент может прислать сам.
+
+### Бэкап данных (cron)
+
+```bash
+# /etc/cron.d/aqua-backup — ежедневно в 4:00, храним две недели
+0 4 * * * <user> tar czf /home/<user>/backups/aqua-$(date +\%F).tgz \
+          -C /home/<user>/apps/paper-aquarium data && \
+          find /home/<user>/backups -name 'aqua-*.tgz' -mtime +14 -delete
+```
+
+### Ротация docker-логов
+
+`/etc/docker/daemon.json` (без неё json-лог контейнера растёт до конца диска):
+
+```json
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
+```
+
+`sudo systemctl restart docker` — применяет ко всем контейнерам.
