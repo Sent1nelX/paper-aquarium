@@ -760,6 +760,7 @@
     this.kind = spec.name;
     this.spec = spec;
     this.mesh = built.group;
+    this.mesh.userData.fish = this;      // чтобы клик-рейкаст нашёл рыбу по мешу
     this.mixer = built.mixer;
     this.beatHz = built.beatHz;
     this.len = spec.length || 2;
@@ -805,6 +806,8 @@
     this.spin = 1;
     this.roll = 0;
     this.rollVel = 0;
+    this.directed = false;     // цель назначена кликом — охота настойчивее
+    this.__mark = null;        // маркер цели на жертве
     scene.add(this.mesh);
   }
 
@@ -886,6 +889,7 @@
     // сбрасываем и плывём как обычная рыба.
     if (this.isShark && this.target) {
       if (t >= this.targetUntil || this.target.eatenUntil) {
+        if (this.directed) { clearMark(this.target); this.directed = false; }
         this.target = null;
       } else if (this.targetKind === 'hunt') {
         // Охота: прямой рывок к жертве, вплотную — хап (жертва прячется).
@@ -895,8 +899,10 @@
         if (td < this.radius + this.target.radius) {
           this.target.eatenUntil = t + 8 + Math.random() * 6;
           this.target.mesh.visible = false;
-          burstBubbles(this.target.pos, 10, 0.9);
-          this.calmUntil = t + 10 + Math.random() * 10;
+          clearMark(this.target);
+          burstBubbles(this.target.pos, 12, 1.0);
+          this.calmUntil = t + 3 + Math.random() * 4;   // короткая пауза — и снова на охоту
+          this.directed = false;
           this.target = null;
         }
       } else {
@@ -1523,7 +1529,7 @@
   var sharkNext = 0;
   function sharkDirector(t) {
     if (t < sharkNext) return;
-    sharkNext = t + 5 + Math.random() * 5;             // проверка раз в 5–10с
+    sharkNext = t + 2.5 + Math.random() * 3;           // проверка раз в 2.5–5.5с
     var sharks = [];
     for (var i = 0; i < fishes.length; i++) {
       if (fishes[i].isShark && !fishes[i].eatenUntil) sharks.push(fishes[i]);
@@ -1532,8 +1538,8 @@
     sharks.forEach(function (s) {
       if (s.target || t < s.calmUntil) return;
       var r = Math.random();
-      if (r < 0.35) {
-        // немного едят: ищем ближайшую мелкую рыбу (крупных и акул не трогает)
+      if (r < 0.62) {
+        // едят охотно: ближайшая мелкая рыба (крупных и акул не трогает)
         var prey = null, pd = 1e9;
         for (var j = 0; j < fishes.length; j++) {
           var f = fishes[j];
@@ -1541,8 +1547,8 @@
           var d = s.pos.distanceTo(f.pos);
           if (d < pd) { pd = d; prey = f; }
         }
-        if (prey && pd < 16) { s.target = prey; s.targetKind = 'hunt'; s.targetUntil = t + 7; }
-      } else if (r < 0.5 && sharks.length > 1) {
+        if (prey && pd < 26) { s.target = prey; s.targetKind = 'hunt'; s.targetUntil = t + 9; }
+      } else if (r < 0.8 && sharks.length > 1) {
         // иногда дерутся: соперник — другая свободная акула, обоюдно. Дальше
         // всё в Fish.update: кружат, серия выпадов, на третьем расходятся.
         var foes = sharks.filter(function (o) { return o !== s && !o.target && t >= o.calmUntil; });
@@ -1559,6 +1565,68 @@
     });
   }
 
+  // ── направить акулу кликом ────────────────────────────────────────────────
+  // Тапнул рыбку — ближайшая акула плывёт и съедает её (данные целы, всплывёт
+  // заново). На жертве — пульсирующее кольцо-прицел, чтобы было видно цель.
+  var _ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
+  function pickFish(clientX, clientY) {
+    var rect = renderer.domElement.getBoundingClientRect();
+    _ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    _ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    _ray.setFromCamera(_ndc, camera);
+    var hits = _ray.intersectObjects(scene.children, true);
+    for (var i = 0; i < hits.length; i++) {
+      var o = hits[i].object;
+      while (o) { if (o.userData && o.userData.fish) return o.userData.fish; o = o.parent; }
+    }
+    return null;
+  }
+  function directHunt(fish) {
+    var t = clock.elapsedTime, best = null, bd = 1e9;
+    for (var i = 0; i < fishes.length; i++) {
+      var s = fishes[i];
+      if (!s.isShark || s.eatenUntil) continue;
+      var d = s.pos.distanceTo(fish.pos) + (s.directed ? 1e6 : 0);   // свободную вперёд
+      if (d < bd) { bd = d; best = s; }
+    }
+    if (!best) return;
+    best.target = fish; best.targetKind = 'hunt'; best.targetUntil = t + 20;
+    best.calmUntil = 0; best.directed = true;
+    addMark(fish);
+  }
+
+  var marks = [], markGeo, markMat;
+  function addMark(fish) {
+    clearMark(fish);
+    if (!markGeo) {
+      markGeo = new THREE.RingGeometry(0.5, 0.62, 28);
+      markMat = new THREE.MeshBasicMaterial({
+        color: 0xff5a5a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false });
+    }
+    var m = new THREE.Mesh(markGeo, markMat);
+    m.renderOrder = 999;
+    scene.add(m);
+    fish.__mark = { fish: fish, mesh: m, born: clock.elapsedTime };
+    marks.push(fish.__mark);
+  }
+  function clearMark(fish) {
+    if (fish && fish.__mark) {
+      scene.remove(fish.__mark.mesh);
+      var i = marks.indexOf(fish.__mark);
+      if (i !== -1) marks.splice(i, 1);
+      fish.__mark = null;
+    }
+  }
+  function updateMarks(t) {
+    for (var i = marks.length - 1; i >= 0; i--) {
+      var mk = marks[i], f = mk.fish;
+      if (f.eatenUntil || !f.mesh.visible || t - mk.born > 22) { clearMark(f); continue; }
+      mk.mesh.position.copy(f.pos);
+      mk.mesh.scale.setScalar(f.radius * (2.2 + Math.sin(t * 6) * 0.25));   // пульс
+      mk.mesh.quaternion.copy(camera.quaternion);                          // билборд
+    }
+  }
+
   function animate() {
     requestAnimationFrame(animate);
     var dt = Math.min(clock.getDelta(), 0.05);
@@ -1569,6 +1637,7 @@
     for (var i = 0; i < fishes.length; i++) fishes[i].update(dt, t);
     if (foods.length) updateFoods(dt, t);
     if (bubbles.length) updateBubbles(dt, t);
+    if (marks.length) updateMarks(t);
 
     renderer.render(scene, camera);
 
@@ -1749,6 +1818,12 @@
   // а по затемнению вокруг неё меню закрывается.
   document.addEventListener('click', function (e) {
     if (menuCard.contains(e.target) || inModal(e.target)) return;
+    // Клик по рыбе в сцене — направить акулу на неё (акул и уже съеденных
+    // не трогаем). Промах по воде — как раньше, открывает/закрывает меню.
+    if (renderer && e.target === renderer.domElement) {
+      var f = pickFish(e.clientX, e.clientY);
+      if (f && !f.isShark && !f.eatenUntil) { directHunt(f); return; }
+    }
     toggleMenu();
   });
 

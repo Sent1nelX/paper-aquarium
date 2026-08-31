@@ -940,6 +940,10 @@ function webpTwin(file) {
 function cacheControl(ext, url) {
   if (ext === '.html' || ext === '.js' || ext === '.css') return 'no-cache';
   if (url.startsWith('/data/')) return 'no-cache';
+  // Раскраски — манифест видов, листы и общий PDF: меняются при добавлении
+  // вида. Держать сутки нельзя, иначе новая рыба (акула, скат) не появляется
+  // в печати, пока у посетителя не протухнет кэш. ETag всё равно даёт 304.
+  if (url.startsWith('/assets/coloring/')) return 'no-cache';
   return 'public, max-age=86400';
 }
 

@@ -72,7 +72,9 @@ const SPECIES = [
   { name: 'discus1',                len: 1.8, eye: null,
     titles: { ru: 'Дискус',            en: 'Discus',                   pl: 'Paletka' } },
   { name: 'shark',                  len: 7.6, eye: null,
-    titles: { ru: 'Акула',             en: 'Shark',                    pl: 'Rekin' } }
+    titles: { ru: 'Акула',             en: 'Shark',                    pl: 'Rekin' } },
+  { name: 'mantaray',               len: 4.6, eye: null,
+    titles: { ru: 'Скат манта',        en: 'Manta ray',                pl: 'Manta' } }
 ];
 
 // Имя файла листа: русский лежит по старому адресу, остальные рядом с ним.
