@@ -165,7 +165,7 @@
   var grid = document.getElementById('grid'), status = document.getElementById('status');
   var passed = 0, total = 0, failures = [];
 
-  fetch('/assets/coloring/manifest.json').then(function (r) { return r.json(); }).then(function (m) {
+  fetch('/assets/coloring/manifest.json?t=' + Date.now()).then(function (r) { return r.json(); }).then(function (m) {
     var i = 0;
     (function next() {
       if (i >= m.fish.length) {

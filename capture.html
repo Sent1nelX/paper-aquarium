@@ -387,7 +387,7 @@
     document.getElementById(id).classList.add('on');
   }
 
-  fetch('/assets/coloring/manifest.json?v=2')
+  fetch('/assets/coloring/manifest.json?t=' + Date.now())
     .then(function (r) { return r.json(); })
     .then(function (m) { manifest = m; })
     .catch(function () {

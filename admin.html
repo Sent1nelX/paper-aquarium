@@ -409,7 +409,7 @@
   }
 
   var titles = {};   // вид → название на трёх языках, из манифеста раскрасок
-  fetch('/assets/coloring/manifest.json?v=2')
+  fetch('/assets/coloring/manifest.json?t=' + Date.now())
     .then(function (r) { return r.json(); })
     .then(function (m) {
       m.fish.forEach(function (f) { titles[f.name] = f.titles || { ru: f.title }; });

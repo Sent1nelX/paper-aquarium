@@ -1482,7 +1482,7 @@
   // Манифест раскрасок — единственный список видов. Пока он не приехал,
   // рыбок не подселяем: иначе первый опрос отбросит их все как «нет шаблона».
   function initPainted() {
-    fetch('/assets/coloring/manifest.json?v=2')
+    fetch('/assets/coloring/manifest.json?t=' + Date.now())
       .then(function (r) { return r.json(); })
       .then(function (m) {
         m.fish.forEach(function (f) { paintedSpec[f.name] = { length: f.length }; });
@@ -2088,7 +2088,7 @@
   function listPack() {
     if (packListed) return;
     packListed = true;
-    fetch('/assets/coloring/manifest.json?v=2')
+    fetch('/assets/coloring/manifest.json?t=' + Date.now())
       .then(function (r) { return r.json(); })
       .then(function (m) {
         (m.fish || []).forEach(function (f) { sheetTitles[f.name] = f.titles || { ru: f.title }; });
