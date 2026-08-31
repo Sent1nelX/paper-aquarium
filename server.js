@@ -545,6 +545,25 @@ function writeSettings(t, s) {
 }
 
 // ── API внутри аквариума ───────────────────────────────────────────────────
+// ── живые обновления (SSE) ───────────────────────────────────────────────────
+// Экран аквариума держит открытое соединение и получает пинок при любом
+// изменении — новая рыбка, корм, смена фона. Съёмка с телефона появляется на
+// телевизоре сразу, а не по опросу. Клиентов на аквариум немного (телевизор,
+// пара телефонов), список живёт в памяти и чистится при обрыве соединения.
+const tankClients = new Map();
+function tankSubscribe(id, res) {
+  let set = tankClients.get(id);
+  if (!set) { set = new Set(); tankClients.set(id, set); }
+  set.add(res);
+  return function () { set.delete(res); if (!set.size) tankClients.delete(id); };
+}
+function tankNotify(id, kind) {
+  const set = tankClients.get(id);
+  if (!set) return;
+  const line = 'data: ' + (kind || 'change') + '\n\n';
+  for (const res of set) { try { res.write(line); } catch (e) { /* оборвалось — уберётся по close */ } }
+}
+
 function handleTankApi(req, res, t, url) {
   // Аквариум заводится только явно, через POST /api/tanks. Значит нет папки —
   // нет аквариума: либо код выдуман, либо аквариум удалили. Отвечать «пусто»
@@ -553,6 +572,22 @@ function handleTankApi(req, res, t, url) {
   if (!fs.existsSync(t.dir)) return send(res, 404, '{"error":"нет такого аквариума"}');
 
   const ev = tankEvents(t.id);
+
+  // Живой поток событий (SSE): держим соединение и шлём строку на каждое
+  // изменение аквариума. Клиент по ней сразу перечитывает рыбок и настройки.
+  if (req.method === 'GET' && url === '/events') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+    res.write('retry: 3000\n\n');
+    const off = tankSubscribe(t.id, res);
+    const ka = setInterval(function () { try { res.write(': ping\n\n'); } catch (e) {} }, 25000);
+    req.on('close', function () { clearInterval(ka); off(); });
+    return;
+  }
 
   if (req.method === 'GET' && url === '/meta') {
     const s = readSettings(t);
@@ -671,6 +706,7 @@ function handleTankApi(req, res, t, url) {
           created: new Date().toISOString()
         }));
         console.log(`+ рыбка из пака ${model.name} в ${t.id} — всего ${listFish(t).length}`);
+        tankNotify(t.id, 'fish');
         return send(res, 200, JSON.stringify({ ok: true, id: fid }));
       }
 
@@ -687,6 +723,7 @@ function handleTankApi(req, res, t, url) {
         id: fid, kind: String(data.kind), created: new Date().toISOString()
       }));
       console.log(`+ рыбка ${data.kind} в ${t.id} (${Math.round(png.length / 1024)} КБ) — всего ${listFish(t).length}`);
+      tankNotify(t.id, 'fish');
       send(res, 200, JSON.stringify({ ok: true, id: fid }));
     });
   }
@@ -695,7 +732,7 @@ function handleTankApi(req, res, t, url) {
   if (req.method === 'DELETE' && delMatch) {
     if (!authed(req, t, ev)) return denied(res, t, ev);
     const n = trashFish(t, delMatch[1]);
-    if (n) console.log(`- рыбка ${delMatch[1]} из ${t.id} → в корзину`);
+    if (n) { console.log(`- рыбка ${delMatch[1]} из ${t.id} → в корзину`); tankNotify(t.id, 'fish'); }
     return send(res, n ? 200 : 404, JSON.stringify({ ok: !!n }));
   }
 
@@ -704,6 +741,7 @@ function handleTankApi(req, res, t, url) {
     const list = listFish(t);
     list.forEach((f) => trashFish(t, f.id));
     console.log(`аквариум ${t.id} очищен, ${list.length} рыбок → в корзину`);
+    tankNotify(t.id, 'fish');
     return send(res, 200, JSON.stringify({ ok: true, removed: list.length }));
   }
 
@@ -774,6 +812,7 @@ function handleTankApi(req, res, t, url) {
           ? merged.background : cur.background
       };
       writeSettings(t, clean);
+      tankNotify(t.id, 'settings');
       send(res, 200, JSON.stringify(clean));
     });
   }
@@ -781,6 +820,7 @@ function handleTankApi(req, res, t, url) {
   if (req.method === 'POST' && url === '/feed') {
     ev.feedAt = Date.now();
     console.log(`🐟 корм насыпан в ${t.id}`);
+    tankNotify(t.id, 'settings');   // корм едет клиенту через настройки (feedAt)
     return send(res, 200, JSON.stringify({ ok: true, feedAt: ev.feedAt }));
   }
 
