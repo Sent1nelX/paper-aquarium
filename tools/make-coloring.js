@@ -71,7 +71,7 @@ const SPECIES = [
     titles: { ru: 'Рыба-бабочка',      en: 'Butterflyfish',            pl: 'Motylek' } },
   { name: 'discus1',                len: 1.8, eye: null,
     titles: { ru: 'Дискус',            en: 'Discus',                   pl: 'Paletka' } },
-  { name: 'shark',                  len: 3.8, eye: null,
+  { name: 'shark',                  len: 7.6, eye: null,
     titles: { ru: 'Акула',             en: 'Shark',                    pl: 'Rekin' } }
 ];
 
