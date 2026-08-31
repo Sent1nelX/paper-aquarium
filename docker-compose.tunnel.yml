@@ -38,6 +38,11 @@ services:
       - "8000"
     networks:
       - aquanet
+    # Ротация лога на самом контейнере, а не в /etc/docker/daemon.json:
+    # так рядом стоящие чужие контейнеры не приходится трогать рестартом докера.
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   # Туннель: публикует домен наружу (HTTPS на крае Cloudflare) и ходит к aqua
   # по внутренней сети aqua_net. Свой туннель на этот проект — он независим
@@ -53,6 +58,9 @@ services:
       - aqua
     networks:
       - aquanet
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
 networks:
   aquanet:

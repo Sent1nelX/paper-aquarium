@@ -237,7 +237,12 @@ docker compose -f docker-compose.tunnel.yml logs -f
 
 ### Ротация docker-логов
 
-`/etc/docker/daemon.json` (без неё json-лог контейнера растёт до конца диска):
+В `docker-compose.tunnel.yml` ротация уже задана на самих контейнерах
+(`logging: max-size 10m, max-file 3`) — на сервере с чужими контейнерами это
+безопаснее, чем общий `daemon.json`, который требует рестарта докера.
+
+Если хочется одну настройку на все контейнеры сразу — `/etc/docker/daemon.json`
+(без неё json-лог контейнера растёт до конца диска):
 
 ```json
 { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
