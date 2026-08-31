@@ -793,6 +793,8 @@
     // Акула (готовая или раскрашенная): иногда охотится на мелкую рыбу,
     // иногда задирает другую акулу. Цели раздаёт sharkDirector, здесь — флаги.
     this.isShark = /shark/.test(this.kind);
+    this.isKraken = /kraken/.test(this.kind);   // апекс-хищник: ест всех, чернила
+    if (this.isKraken) this.speed *= 0.6;       // тяжёлый, движется неспешно
     this.target = null;        // рыба-жертва или акула-соперник
     this.targetKind = null;    // 'hunt' | 'fight'
     this.targetUntil = 0;
@@ -885,23 +887,40 @@
       }
     }
 
+    // Рыбы удирают от хищников поблизости: чем ближе акула/кракен — тем резче
+    // рывок прочь. Из-за этого охота выглядит живой: жертва бросается наутёк.
+    if (!this.isShark && !this.isKraken) {
+      for (var pi = 0; pi < fishes.length; pi++) {
+        var pr = fishes[pi];
+        if ((!pr.isShark && !pr.isKraken) || pr.eatenUntil) continue;
+        _d.copy(this.pos).sub(pr.pos);
+        var pdist = _d.length();
+        var scare = pr.len * 1.9;                 // радиус страха ~ размер хищника
+        if (pdist > 0.001 && pdist < scare) {
+          _a.addScaledVector(_d.divideScalar(pdist), (scare - pdist) / scare * 6.5);
+          this.fullUntil = t + 1.5;               // в панике не до корма
+        }
+      }
+    }
+
     // Акула идёт к назначенной цели. Цель протухла или жертву уже съели —
     // сбрасываем и плывём как обычная рыба.
-    if (this.isShark && this.target) {
+    if ((this.isShark || this.isKraken) && this.target) {
       if (t >= this.targetUntil || this.target.eatenUntil) {
         if (this.directed) { clearMark(this.target); this.directed = false; }
         this.target = null;
       } else if (this.targetKind === 'hunt') {
-        // Охота: прямой рывок к жертве, вплотную — хап (жертва прячется).
+        // Охота: рывок к жертве, вплотную — хап (жертва прячется, всплывёт).
         _d.copy(this.target.pos).sub(this.pos);
         var td = _d.length() || 0.001;
-        _a.addScaledVector(_d.divideScalar(td), 5.5);
+        _a.addScaledVector(_d.divideScalar(td), this.isKraken ? 6.5 : 5.5);
         if (td < this.radius + this.target.radius) {
           this.target.eatenUntil = t + 8 + Math.random() * 6;
           this.target.mesh.visible = false;
           clearMark(this.target);
-          burstBubbles(this.target.pos, 12, 1.0);
-          this.calmUntil = t + 3 + Math.random() * 4;   // короткая пауза — и снова на охоту
+          if (this.isKraken) burstInk(this.target.pos, 9);        // чернильное облако
+          else burstBubbles(this.target.pos, 12, 1.0);
+          this.calmUntil = t + (this.isKraken ? 5 : 3) + Math.random() * 4;
           this.directed = false;
           this.target = null;
         }
@@ -958,6 +977,12 @@
     // Пол жёсткий: рыба может подойти к нему вплотную, но не сквозь.
     var floor = FLOOR + FLOOR_ROOM;
     if (this.pos.y < floor) _a.y += (floor - this.pos.y) * 4;
+
+    // Кракен льнёт ко дну — тяжёлый придонный хищник, не парит у поверхности.
+    if (this.isKraken) {
+      var lowY = limitsAt(this.pos.z).yBot + this.len * 0.35;
+      _a.y += (lowY - this.pos.y) * 0.4;
+    }
 
     this.vel.addScaledVector(_a, dt * 2.0);
     var sp = this.vel.length();
@@ -1044,6 +1069,45 @@
       b.mesh.scale.setScalar(b.r0 * Math.max(0.01, s));
       if (k >= 1) { scene.remove(b.mesh); bubbles.splice(i, 1); }
     }
+  }
+
+  // ── чернила кракена ───────────────────────────────────────────────────────
+  // Тёмное облако в точке атаки: расплывается, всплывает и растворяется.
+  // Материал у каждого клуба свой — чтобы гаснуть по прозрачности.
+  var inks = [], inkGeo;
+  function burstInk(pos, n) {
+    if (!inkGeo) inkGeo = new THREE.SphereGeometry(1, 10, 8);
+    n = n || 7;
+    for (var i = 0; i < n; i++) {
+      var mat = new THREE.MeshBasicMaterial({ color: 0x0a0f14, transparent: true, opacity: 0.55, depthWrite: false });
+      var m = new THREE.Mesh(inkGeo, mat);
+      var r0 = 0.5 + Math.random() * 0.6;
+      m.scale.setScalar(r0);
+      m.position.set(pos.x + (Math.random() - 0.5) * 1.4, pos.y + (Math.random() - 0.5) * 1.4, pos.z + (Math.random() - 0.5) * 1.4);
+      scene.add(m);
+      inks.push({ mesh: m, mat: mat, r0: r0, grow: 2.5 + Math.random() * 2, vy: 0.15 + Math.random() * 0.25, vx: (Math.random() - 0.5) * 0.3, life: 0, ttl: 1.8 + Math.random() * 1.2 });
+    }
+  }
+  function updateInks(dt) {
+    for (var i = inks.length - 1; i >= 0; i--) {
+      var k = inks[i], p = k.mesh.position;
+      k.life += dt; var f = k.life / k.ttl;
+      p.y += k.vy * dt; p.x += k.vx * dt;
+      k.mesh.scale.setScalar(k.r0 * (1 + f * k.grow));
+      k.mat.opacity = 0.55 * (1 - f);
+      if (f >= 1) { scene.remove(k.mesh); k.mat.dispose(); inks.splice(i, 1); }
+    }
+  }
+
+  // ── фоновые пузыри ────────────────────────────────────────────────────────
+  // Изредка со дна поднимается пара пузырьков — живость сцены без событий.
+  var ambNext = 0, _amb = new THREE.Vector3();
+  function ambientBubbles(t) {
+    if (t < ambNext) return;
+    ambNext = t + 1.5 + Math.random() * 2.5;
+    var z = Z_FAR + Math.random() * (Z_NEAR - Z_FAR), l = limitsAt(z);
+    _amb.set((Math.random() * 2 - 1) * l.hw * 0.9, l.yBot + 0.3, z);
+    burstBubbles(_amb, 2 + Math.floor(Math.random() * 3), 0.4);
   }
 
   // Потолок на общее число гранул: кнопка блокируется на несколько секунд,
@@ -1153,6 +1217,9 @@
   // есть раскраска, берём длину из манифеста — иначе один и тот же вид был бы
   // разного размера в зависимости от того, откуда он приплыл.
   var PACK_LEN = 2.2;
+  // Длина для видов без листа раскраски (в манифесте их нет, паджа PACK_LEN мала).
+  // Кракен — крупный хищник, заметно больше акулы.
+  var PACK_LEN_OVERRIDE = { kraken: 11 };
 
   // Рисунки, снятые с прежних четырёх моделей (те были Free3D Personal Use и
   // из игры убраны). Пересаживаем их на покупной вид с похожими пропорциями
@@ -1307,7 +1374,7 @@
         var known = paintedSpec[name];
         var spec = {
           name: name, gltf: gltf, bend: 0,
-          length: known && known.length ? known.length : PACK_LEN
+          length: known && known.length ? known.length : (PACK_LEN_OVERRIDE[name] || PACK_LEN)
         };
         spec.info = normalizeFish(gltf.scene, spec.length, FishFrame.fromSkeleton(gltf));
         var b = FishFrame.bounds(gltf.scene);
@@ -1563,23 +1630,45 @@
       }
       // иначе — просто плавает до следующей проверки
     });
+
+    // Кракен: реже акул, но хватает кого угодно рядом — хоть рыбу, хоть акулу.
+    for (var ki = 0; ki < fishes.length; ki++) {
+      var kr = fishes[ki];
+      if (!kr.isKraken || kr.eatenUntil || kr.target || t < kr.calmUntil) continue;
+      if (Math.random() > 0.5) continue;               // не на каждой проверке
+      var victim = null, vd = 1e9;
+      for (var vj = 0; vj < fishes.length; vj++) {
+        var v = fishes[vj];
+        if (v === kr || v.isKraken || v.eatenUntil) continue;
+        var d = kr.pos.distanceTo(v.pos);
+        if (d < vd) { vd = d; victim = v; }
+      }
+      if (victim && vd < 22) { kr.target = victim; kr.targetKind = 'hunt'; kr.targetUntil = t + 12; }
+    }
   }
 
   // ── направить акулу кликом ────────────────────────────────────────────────
   // Тапнул рыбку — ближайшая акула плывёт и съедает её (данные целы, всплывёт
   // заново). На жертве — пульсирующее кольцо-прицел, чтобы было видно цель.
-  var _ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
+  // Пикинг по экрану, а не точным лучом: рыбки мелкие и всё время движутся,
+  // попасть лучом в низкополигональный меш почти нельзя. Проецируем всех на
+  // экран и берём ближайшую к точке клика в радиусе — так тапается легко.
+  var _pv = new THREE.Vector3();
   function pickFish(clientX, clientY) {
     var rect = renderer.domElement.getBoundingClientRect();
-    _ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    _ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    _ray.setFromCamera(_ndc, camera);
-    var hits = _ray.intersectObjects(scene.children, true);
-    for (var i = 0; i < hits.length; i++) {
-      var o = hits[i].object;
-      while (o) { if (o.userData && o.userData.fish) return o.userData.fish; o = o.parent; }
+    var px = clientX - rect.left, py = clientY - rect.top;
+    var best = null, bestD = 80;   // радиус попадания в пикселях
+    for (var i = 0; i < fishes.length; i++) {
+      var f = fishes[i];
+      if (f.eatenUntil) continue;
+      _pv.copy(f.pos).project(camera);
+      if (_pv.z > 1) continue;     // за камерой
+      var sx = (_pv.x * 0.5 + 0.5) * rect.width;
+      var sy = (-_pv.y * 0.5 + 0.5) * rect.height;
+      var d = Math.hypot(sx - px, sy - py);
+      if (d < bestD) { bestD = d; best = f; }
     }
-    return null;
+    return best;
   }
   function directHunt(fish) {
     var t = clock.elapsedTime, best = null, bd = 1e9;
@@ -1637,7 +1726,9 @@
     for (var i = 0; i < fishes.length; i++) fishes[i].update(dt, t);
     if (foods.length) updateFoods(dt, t);
     if (bubbles.length) updateBubbles(dt, t);
+    if (inks.length) updateInks(dt);
     if (marks.length) updateMarks(t);
+    ambientBubbles(t);
 
     renderer.render(scene, camera);
 
