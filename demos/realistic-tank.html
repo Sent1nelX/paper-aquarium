@@ -800,6 +800,8 @@
     this.isShark = /shark/.test(this.kind);
     this.isSquid = /squid/.test(this.kind);   // апекс-хищник: ест всех, чернила
     if (this.isSquid) this.speed *= 0.75;      // тяжёлый, движется неспешно
+    // Мелкие мирные рыбки держатся стайкой со своими — сцена оживает косяками.
+    this.school = !this.isShark && !this.isSquid && this.len < 2.4;
     this.target = null;        // рыба-жертва или акула-соперник
     this.targetKind = null;    // 'hunt' | 'fight'
     this.targetUntil = 0;
@@ -842,8 +844,8 @@
     );
     if (this.isSquid) _a.multiplyScalar(0.5);   // спокойнее рыскает — не дёргается
 
-    // мелкие рыбки держатся стайкой
-    if (this.spec.school) {
+    // мелкие рыбки держатся стайкой (свои с своими)
+    if (this.spec.school || this.school) {
       var cx = 0, cy = 0, cz = 0, n = 0;
       for (var i = 0; i < fishes.length; i++) {
         var o = fishes[i];
@@ -1016,6 +1018,12 @@
       this.roll *= Math.pow(0.2, dt);          // крен возвращается к нулю
       if (Math.abs(this.roll) < 0.002 && Math.abs(this.rollVel) < 0.01) { this.roll = 0; this.rollVel = 0; }
       this.mesh.rotateZ(this.roll);
+    }
+
+    // След-пузырьки за хищником в движении — лёгкий штрих живости.
+    if ((this.isShark || this.isSquid) && this.vel.length() > this.speed * 0.55 && Math.random() < dt * 1.3) {
+      _amb.set(this.pos.x, this.pos.y + this.len * 0.15, this.pos.z);
+      burstBubbles(_amb, 1, this.len * 0.15);
     }
 
     // Скелетная анимация Swim там, где она есть; изгиб шейдером — где нет.
