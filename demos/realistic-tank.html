@@ -788,12 +788,43 @@
     // она сыта после последней гранулы.
     this.noticeFood = 6 + Math.random() * 6;
     this.fullUntil = 0;
+
+    // Акула (готовая или раскрашенная): иногда охотится на мелкую рыбу,
+    // иногда задирает другую акулу. Цели раздаёт sharkDirector, здесь — флаги.
+    this.isShark = /shark/.test(this.kind);
+    this.target = null;        // рыба-жертва или акула-соперник
+    this.targetKind = null;    // 'hunt' | 'fight'
+    this.targetUntil = 0;
+    this.calmUntil = 0;        // наелась/подралась — какое-то время просто плавает
+    this.eatenUntil = 0;       // до этой секунды рыбка «переваривается» (скрыта)
+    // Драка: кружат, потом серия выпадов с отскоком. clashes — сколько уже
+    // столкновений, lungeAt — когда следующий бросок, spin — в какую сторону
+    // кружит, roll/rollVel — крен тела на ударе (для «крутизны»).
+    this.clashes = 0;
+    this.lungeAt = 0;
+    this.spin = 1;
+    this.roll = 0;
+    this.rollVel = 0;
     scene.add(this.mesh);
   }
 
   var _a = new THREE.Vector3(), _l = new THREE.Vector3(), _d = new THREE.Vector3();
+  var _t2 = new THREE.Vector3(), _mid = new THREE.Vector3();
 
   Fish.prototype.update = function (dt, t) {
+    // Съеденная рыбка не удаляется с сервера — просто прячется и через паузу
+    // всплывает заново в другом месте. Детский рисунок цел, рыбка «вернулась».
+    if (this.eatenUntil) {
+      if (t < this.eatenUntil) return;                 // «переваривается» вне сцены
+      this.eatenUntil = 0;
+      this.mesh.visible = true;
+      var rz = Z_FAR + Math.random() * (Z_NEAR - Z_FAR), rl = limitsAt(rz);
+      this.pos.set(
+        (Math.random() * 2 - 1) * Math.max(0.5, rl.hw - MARGIN),
+        rl.yBot + MARGIN + Math.random() * Math.max(0.5, rl.yTop - rl.yBot - 2 * MARGIN),
+        rz);
+    }
+
     _a.set(
       Math.sin(t * 0.42 + this.phase) * 0.5,
       Math.sin(t * 0.3 + this.phase * 1.6) * 0.22,
@@ -851,6 +882,54 @@
       }
     }
 
+    // Акула идёт к назначенной цели. Цель протухла или жертву уже съели —
+    // сбрасываем и плывём как обычная рыба.
+    if (this.isShark && this.target) {
+      if (t >= this.targetUntil || this.target.eatenUntil) {
+        this.target = null;
+      } else if (this.targetKind === 'hunt') {
+        // Охота: прямой рывок к жертве, вплотную — хап (жертва прячется).
+        _d.copy(this.target.pos).sub(this.pos);
+        var td = _d.length() || 0.001;
+        _a.addScaledVector(_d.divideScalar(td), 5.5);
+        if (td < this.radius + this.target.radius) {
+          this.target.eatenUntil = t + 8 + Math.random() * 6;
+          this.target.mesh.visible = false;
+          burstBubbles(this.target.pos, 10, 0.9);
+          this.calmUntil = t + 10 + Math.random() * 10;
+          this.target = null;
+        }
+      } else {
+        // Драка: пока не время выпада — кружим боком вокруг соперника, держа
+        // дистанцию; в момент выпада — резкий бросок, на ударе пузыри и отскок.
+        _d.copy(this.target.pos).sub(this.pos);
+        var fd = _d.length() || 0.001;
+        _d.divideScalar(fd);
+        var reach = this.radius + this.target.radius + 0.3;
+        if (t < this.lungeAt) {
+          _t2.set(-_d.z, _d.y * 0.2, _d.x).multiplyScalar(this.spin);   // тангенциально
+          _a.addScaledVector(_t2, 3.4);
+          var want = this.len * 1.5;
+          _a.addScaledVector(_d, (fd - want) * 1.3);                    // держим дистанцию
+        } else {
+          _a.addScaledVector(_d, 9.5);                                  // выпад
+          if (fd < reach) {
+            _mid.copy(this.pos).add(this.target.pos).multiplyScalar(0.5);
+            burstBubbles(_mid, 14, 1.3);
+            this.vel.addScaledVector(_d, -this.speed * 1.2);            // отскок назад
+            this.rollVel += (Math.random() < 0.5 ? -1 : 1) * 9;        // кувырок
+            this.clashes++;
+            this.spin = -this.spin;
+            this.lungeAt = t + 1.0 + Math.random() * 0.8;
+            if (this.clashes >= 3) {                                    // накрутились
+              this.calmUntil = t + 10 + Math.random() * 8;
+              this.targetUntil = t;
+            }
+          }
+        }
+      }
+    }
+
     var M = MARGIN;
     var W = 5;
 
@@ -884,6 +963,15 @@
     this.mesh.lookAt(_l.copy(this.pos).add(this.vel));
     this.mesh.rotation.z += Math.sin(t * 2.5 + this.phase) * 0.015;
 
+    // Крен от драки: удар даёт rollVel, тело кувыркается и выравнивается.
+    if (this.rollVel || this.roll) {
+      this.roll += this.rollVel * dt;
+      this.rollVel *= Math.pow(0.015, dt);     // импульс быстро гаснет
+      this.roll *= Math.pow(0.2, dt);          // крен возвращается к нулю
+      if (Math.abs(this.roll) < 0.002 && Math.abs(this.rollVel) < 0.01) { this.roll = 0; this.rollVel = 0; }
+      this.mesh.rotateZ(this.roll);
+    }
+
     // Скелетная анимация Swim там, где она есть; изгиб шейдером — где нет.
     //
     // Скорость клипа считаем от пути, а не берём как записано: рыба должна
@@ -910,6 +998,47 @@
   // и съедают. Что дотонуло до пола — полежит и растворится.
   var foods = [];
   var foodGeo, foodMat;
+
+  // ── пузыри: всплеск на ударе акул ─────────────────────────────────────────
+  // Лёгкие полупрозрачные шарики: рождаются облачком в точке удара, всплывают,
+  // растут и лопаются. Один общий материал и геометрия — дёшево для кадра.
+  var bubbles = [], bubbleGeo, bubbleMat;
+  function burstBubbles(pos, n, spread) {
+    if (!bubbleGeo) {
+      bubbleGeo = new THREE.SphereGeometry(1, 8, 6);
+      bubbleMat = new THREE.MeshBasicMaterial({
+        color: 0xd6f2ff, transparent: true, opacity: 0.55, depthWrite: false });
+    }
+    spread = spread || 1;
+    for (var i = 0; i < n; i++) {
+      var r0 = 0.05 + Math.random() * 0.13;
+      var m = new THREE.Mesh(bubbleGeo, bubbleMat);
+      m.scale.setScalar(r0);
+      m.position.set(
+        pos.x + (Math.random() - 0.5) * spread,
+        pos.y + (Math.random() - 0.5) * spread * 0.6,
+        pos.z + (Math.random() - 0.5) * spread);
+      scene.add(m);
+      bubbles.push({
+        mesh: m, r0: r0, seed: Math.random() * 6.28,
+        vy: 0.7 + Math.random() * 1.2, vx: (Math.random() - 0.5) * 0.6, vz: (Math.random() - 0.5) * 0.6,
+        life: 0, ttl: 0.9 + Math.random() * 0.7
+      });
+    }
+  }
+  function updateBubbles(dt, t) {
+    for (var i = bubbles.length - 1; i >= 0; i--) {
+      var b = bubbles[i], p = b.mesh.position;
+      b.life += dt;
+      p.y += b.vy * dt;
+      p.x += (b.vx + Math.sin(t * 3 + b.seed) * 0.3) * dt;
+      p.z += b.vz * dt;
+      var k = b.life / b.ttl;
+      var s = k < 0.8 ? (1 + k * 0.8) : (1.64) * (1 - (k - 0.8) / 0.2 * 0.85);   // рост, в конце лопается
+      b.mesh.scale.setScalar(b.r0 * Math.max(0.01, s));
+      if (k >= 1) { scene.remove(b.mesh); bubbles.splice(i, 1); }
+    }
+  }
 
   // Потолок на общее число гранул: кнопка блокируется на несколько секунд,
   // но за долгую игру корм всё равно накопился бы и просадил кадры.
@@ -1388,14 +1517,58 @@
   });
 
   // ── цикл ─────────────────────────────────────────────────────────────────
+  // Распорядитель акул: раз в несколько секунд решает, чем занята каждая
+  // акула. «Немного едят» и «иногда дерутся» — невысокие шансы, между делом
+  // акула просто плавает. Само движение к цели — в Fish.update.
+  var sharkNext = 0;
+  function sharkDirector(t) {
+    if (t < sharkNext) return;
+    sharkNext = t + 5 + Math.random() * 5;             // проверка раз в 5–10с
+    var sharks = [];
+    for (var i = 0; i < fishes.length; i++) {
+      if (fishes[i].isShark && !fishes[i].eatenUntil) sharks.push(fishes[i]);
+    }
+    if (!sharks.length) return;
+    sharks.forEach(function (s) {
+      if (s.target || t < s.calmUntil) return;
+      var r = Math.random();
+      if (r < 0.35) {
+        // немного едят: ищем ближайшую мелкую рыбу (крупных и акул не трогает)
+        var prey = null, pd = 1e9;
+        for (var j = 0; j < fishes.length; j++) {
+          var f = fishes[j];
+          if (f === s || f.isShark || f.eatenUntil || f.len > s.len * 0.8) continue;
+          var d = s.pos.distanceTo(f.pos);
+          if (d < pd) { pd = d; prey = f; }
+        }
+        if (prey && pd < 16) { s.target = prey; s.targetKind = 'hunt'; s.targetUntil = t + 7; }
+      } else if (r < 0.5 && sharks.length > 1) {
+        // иногда дерутся: соперник — другая свободная акула, обоюдно. Дальше
+        // всё в Fish.update: кружат, серия выпадов, на третьем расходятся.
+        var foes = sharks.filter(function (o) { return o !== s && !o.target && t >= o.calmUntil; });
+        if (foes.length) {
+          var foe = foes[Math.floor(Math.random() * foes.length)];
+          var spin = Math.random() < 0.5 ? -1 : 1;
+          s.target = foe;   s.targetKind = 'fight';   s.targetUntil = t + 9;
+          s.clashes = 0;    s.lungeAt = t + 1.2;      s.spin = spin;
+          foe.target = s;   foe.targetKind = 'fight'; foe.targetUntil = t + 9;
+          foe.clashes = 0;  foe.lungeAt = t + 1.2;    foe.spin = -spin;
+        }
+      }
+      // иначе — просто плавает до следующей проверки
+    });
+  }
+
   function animate() {
     requestAnimationFrame(animate);
     var dt = Math.min(clock.getDelta(), 0.05);
     var t = clock.elapsedTime;
     uTime.value = t;
 
+    sharkDirector(t);
     for (var i = 0; i < fishes.length; i++) fishes[i].update(dt, t);
     if (foods.length) updateFoods(dt, t);
+    if (bubbles.length) updateBubbles(dt, t);
 
     renderer.render(scene, camera);
 

@@ -42,3 +42,6 @@ node_modules/
 # Рядом лежит шаблон cloudflared/config.example.yml, он в историю идёт.
 cloudflared/*.json
 cloudflared/config.yml
+
+# Пак на сервере (bind-mount), в репо не идёт — как и assets/models/pack/.
+/pack/

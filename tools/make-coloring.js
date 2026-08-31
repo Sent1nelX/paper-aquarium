@@ -70,7 +70,9 @@ const SPECIES = [
   { name: 'bluecheekbutterflyfish', len: 1.5, eye: null,
     titles: { ru: 'Рыба-бабочка',      en: 'Butterflyfish',            pl: 'Motylek' } },
   { name: 'discus1',                len: 1.8, eye: null,
-    titles: { ru: 'Дискус',            en: 'Discus',                   pl: 'Paletka' } }
+    titles: { ru: 'Дискус',            en: 'Discus',                   pl: 'Paletka' } },
+  { name: 'shark',                  len: 3.8, eye: null,
+    titles: { ru: 'Акула',             en: 'Shark',                    pl: 'Rekin' } }
 ];
 
 // Имя файла листа: русский лежит по старому адресу, остальные рядом с ним.
