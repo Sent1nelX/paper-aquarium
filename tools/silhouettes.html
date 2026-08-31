@@ -44,8 +44,18 @@
     var root = gltf.scene;
     root.updateWorldMatrix(true, true);
 
-    var skel = FishFrame.fromSkeleton(gltf);
     var b = FishFrame.bounds(root);
+    var skel = FishFrame.fromSkeleton(gltf);
+    if (!skel) {
+      // Модель без скелета (осьминог, кальмар): скелетных осей нет, берём из
+      // габарита — самая длинная сторона = тело, y = спина, остаток = вбок.
+      // Голову ставим на +тело; окажется хвостом вперёд — довернём в сцене.
+      var s = b.size, order = ['x', 'y', 'z'].sort(function (a, c) { return s[c] - s[a]; });
+      var body = order[0];
+      var up = body === 'y' ? order[1] : 'y';
+      var lat = ['x', 'y', 'z'].filter(function (a) { return a !== body && a !== up; })[0];
+      skel = { axes: { body: body, up: up, lat: lat }, headAtMax: true };
+    }
     var quat = FishFrame.orientQuat(skel.axes, skel.headAtMax, b);
 
     // ориентируем и центрируем: нос → +Z, спина → +Y, габарит вокруг нуля
