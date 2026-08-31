@@ -970,7 +970,9 @@ http.createServer((req, res) => {
 
   if (url === '/raskraski.pdf') {
     res.writeHead(302, {
-      Location: '/assets/coloring/raskraski.' + coloringPdf(req) + '.pdf',
+      // ?v — версия набора раскрасок (CF-зона переопределяет наш no-cache
+      // своим TTL, поэтому свежесть через URL). Бампать при смене набора.
+      Location: '/assets/coloring/raskraski.' + coloringPdf(req) + '.pdf?v=2',
       'Cache-Control': 'no-store',
       Vary: 'Accept-Language'
     });

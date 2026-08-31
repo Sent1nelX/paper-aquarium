@@ -104,9 +104,13 @@ var PDF = Q.has('pdf');
 
 // Готовый PDF собран генератором точно под A4 — в нём метки заведомо
 // правильного размера, в отличие от «Сохранить как PDF» с чужими полями.
+var COLORING_VER = '2';   // бампать при изменении набора раскрасок (кэш-бут)
 var pdfLink = document.getElementById('pdfLink');
 function repdf() {
-  pdfLink.href = '/assets/coloring/raskraski.' + I18N.lang + '.pdf';
+  // ?v — версия набора раскрасок. CF-зона переопределяет заголовки кэша своим
+  // TTL, поэтому свежесть даём через URL: сменился набор (добавили вид) —
+  // бампни COLORING_VER, и PDF/манифест перечитаются и на краю, и в браузере.
+  pdfLink.href = '/assets/coloring/raskraski.' + I18N.lang + '.pdf?v=' + COLORING_VER;
   pdfLink.setAttribute('download', I18N.t('print.pdf.file'));
 }
 repdf();
@@ -152,7 +156,7 @@ function titleOf(f) {
   return (f.titles && (f.titles[I18N.lang] || f.titles.ru)) || f.title;
 }
 
-fetch('/assets/coloring/manifest.json')
+fetch('/assets/coloring/manifest.json?v=' + COLORING_VER)
   .then(function (r) { return r.json(); })
   .then(function (m) {
     var list = document.getElementById('list');
