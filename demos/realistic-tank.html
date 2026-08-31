@@ -794,7 +794,7 @@
     // иногда задирает другую акулу. Цели раздаёт sharkDirector, здесь — флаги.
     this.isShark = /shark/.test(this.kind);
     this.isKraken = /kraken/.test(this.kind);   // апекс-хищник: ест всех, чернила
-    if (this.isKraken) this.speed *= 0.6;       // тяжёлый, движется неспешно
+    if (this.isKraken) this.speed *= 0.75;      // тяжёлый, движется неспешно
     this.target = null;        // рыба-жертва или акула-соперник
     this.targetKind = null;    // 'hunt' | 'fight'
     this.targetUntil = 0;
@@ -835,6 +835,7 @@
       Math.sin(t * 0.3 + this.phase * 1.6) * 0.22,
       Math.cos(t * 0.37 + this.phase) * 0.5
     );
+    if (this.isKraken) _a.multiplyScalar(0.5);   // спокойнее рыскает — не дёргается
 
     // мелкие рыбки держатся стайкой
     if (this.spec.school) {
@@ -890,16 +891,20 @@
     // Рыбы удирают от хищников поблизости: чем ближе акула/кракен — тем резче
     // рывок прочь. Из-за этого охота выглядит живой: жертва бросается наутёк.
     if (!this.isShark && !this.isKraken) {
+      // Только от БЛИЖАЙШЕГО хищника и мягко: сумма рывков от восьми акул
+      // дёргала рыбу на месте. Один плавный вектор прочь — и рыба уходит ровно.
+      var np = null, npd = 1e9, nps = 0;
       for (var pi = 0; pi < fishes.length; pi++) {
         var pr = fishes[pi];
         if ((!pr.isShark && !pr.isKraken) || pr.eatenUntil) continue;
-        _d.copy(this.pos).sub(pr.pos);
-        var pdist = _d.length();
-        var scare = pr.len * 1.9;                 // радиус страха ~ размер хищника
-        if (pdist > 0.001 && pdist < scare) {
-          _a.addScaledVector(_d.divideScalar(pdist), (scare - pdist) / scare * 6.5);
-          this.fullUntil = t + 1.5;               // в панике не до корма
-        }
+        var sc = pr.len * 1.6;
+        var pdst = this.pos.distanceTo(pr.pos);
+        if (pdst < sc && pdst < npd) { npd = pdst; np = pr; nps = sc; }
+      }
+      if (np && npd > 0.001) {
+        _d.copy(this.pos).sub(np.pos).divideScalar(npd);
+        _a.addScaledVector(_d, 3.2 * (1 - npd / nps));
+        this.fullUntil = t + 1;
       }
     }
 
@@ -981,7 +986,7 @@
     // Кракен льнёт ко дну — тяжёлый придонный хищник, не парит у поверхности.
     if (this.isKraken) {
       var lowY = limitsAt(this.pos.z).yBot + this.len * 0.35;
-      _a.y += (lowY - this.pos.y) * 0.4;
+      _a.y += (lowY - this.pos.y) * 0.22;       // мягко, иначе дёргается по вертикали
     }
 
     this.vel.addScaledVector(_a, dt * 2.0);
@@ -991,7 +996,12 @@
 
     this.pos.addScaledVector(this.vel, dt);
     this.mesh.position.copy(this.pos);
-    this.mesh.lookAt(_l.copy(this.pos).add(this.vel));
+    // Курс сглаживаем: смотрим не на сырую скорость (она дёргается при резкой
+    // смене ускорения — паника, границы), а на плавно догоняющее её направление.
+    // Из-за этого рыба поворачивает мягко, а не рвано.
+    if (!this._dir) this._dir = this.vel.clone();
+    this._dir.lerp(this.vel, Math.min(1, dt * 3.5));
+    if (this._dir.lengthSq() > 1e-4) this.mesh.lookAt(_l.copy(this.pos).add(this._dir));
     this.mesh.rotation.z += Math.sin(t * 2.5 + this.phase) * 0.015;
 
     // Крен от драки: удар даёт rollVel, тело кувыркается и выравнивается.
