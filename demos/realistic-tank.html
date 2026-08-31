@@ -798,8 +798,8 @@
     // Акула (готовая или раскрашенная): иногда охотится на мелкую рыбу,
     // иногда задирает другую акулу. Цели раздаёт sharkDirector, здесь — флаги.
     this.isShark = /shark/.test(this.kind);
-    this.isKraken = /kraken/.test(this.kind);   // апекс-хищник: ест всех, чернила
-    if (this.isKraken) this.speed *= 0.75;      // тяжёлый, движется неспешно
+    this.isSquid = /squid/.test(this.kind);   // апекс-хищник: ест всех, чернила
+    if (this.isSquid) this.speed *= 0.75;      // тяжёлый, движется неспешно
     this.target = null;        // рыба-жертва или акула-соперник
     this.targetKind = null;    // 'hunt' | 'fight'
     this.targetUntil = 0;
@@ -840,7 +840,7 @@
       Math.sin(t * 0.3 + this.phase * 1.6) * 0.22,
       Math.cos(t * 0.37 + this.phase) * 0.5
     );
-    if (this.isKraken) _a.multiplyScalar(0.5);   // спокойнее рыскает — не дёргается
+    if (this.isSquid) _a.multiplyScalar(0.5);   // спокойнее рыскает — не дёргается
 
     // мелкие рыбки держатся стайкой
     if (this.spec.school) {
@@ -895,13 +895,13 @@
 
     // Рыбы удирают от хищников поблизости: чем ближе акула/кракен — тем резче
     // рывок прочь. Из-за этого охота выглядит живой: жертва бросается наутёк.
-    if (!this.isShark && !this.isKraken) {
+    if (!this.isShark && !this.isSquid) {
       // Только от БЛИЖАЙШЕГО хищника и мягко: сумма рывков от восьми акул
       // дёргала рыбу на месте. Один плавный вектор прочь — и рыба уходит ровно.
       var np = null, npd = 1e9, nps = 0;
       for (var pi = 0; pi < fishes.length; pi++) {
         var pr = fishes[pi];
-        if ((!pr.isShark && !pr.isKraken) || pr.eatenUntil) continue;
+        if ((!pr.isShark && !pr.isSquid) || pr.eatenUntil) continue;
         var sc = pr.len * 1.6;
         var pdst = this.pos.distanceTo(pr.pos);
         if (pdst < sc && pdst < npd) { npd = pdst; np = pr; nps = sc; }
@@ -915,7 +915,7 @@
 
     // Акула идёт к назначенной цели. Цель протухла или жертву уже съели —
     // сбрасываем и плывём как обычная рыба.
-    if ((this.isShark || this.isKraken) && this.target) {
+    if ((this.isShark || this.isSquid) && this.target) {
       if (t >= this.targetUntil || this.target.eatenUntil) {
         if (this.directed) { clearMark(this.target); this.directed = false; }
         this.target = null;
@@ -923,14 +923,14 @@
         // Охота: рывок к жертве, вплотную — хап (жертва прячется, всплывёт).
         _d.copy(this.target.pos).sub(this.pos);
         var td = _d.length() || 0.001;
-        _a.addScaledVector(_d.divideScalar(td), this.isKraken ? 6.5 : 5.5);
+        _a.addScaledVector(_d.divideScalar(td), this.isSquid ? 6.5 : 5.5);
         if (td < this.radius + this.target.radius) {
           this.target.eatenUntil = t + 8 + Math.random() * 6;
           this.target.mesh.visible = false;
           clearMark(this.target);
-          if (this.isKraken) burstInk(this.target.pos, 9);        // чернильное облако
+          if (this.isSquid) burstInk(this.target.pos, 9);        // чернильное облако
           else burstBubbles(this.target.pos, 12, 1.0);
-          this.calmUntil = t + (this.isKraken ? 5 : 3) + Math.random() * 4;
+          this.calmUntil = t + (this.isSquid ? 5 : 3) + Math.random() * 4;
           this.directed = false;
           this.target = null;
         }
@@ -989,7 +989,7 @@
     if (this.pos.y < floor) _a.y += (floor - this.pos.y) * 4;
 
     // Кракен льнёт ко дну — тяжёлый придонный хищник, не парит у поверхности.
-    if (this.isKraken) {
+    if (this.isSquid) {
       var lowY = limitsAt(this.pos.z).yBot + this.len * 0.35;
       _a.y += (lowY - this.pos.y) * 0.22;       // мягко, иначе дёргается по вертикали
     }
@@ -1234,7 +1234,7 @@
   var PACK_LEN = 2.2;
   // Длина для видов без листа раскраски (в манифесте их нет, паджа PACK_LEN мала).
   // Кракен — крупный хищник, заметно больше акулы.
-  var PACK_LEN_OVERRIDE = { kraken: 11 };
+  var PACK_LEN_OVERRIDE = { squid: 9 };
 
   // Рисунки, снятые с прежних четырёх моделей (те были Free3D Personal Use и
   // из игры убраны). Пересаживаем их на покупной вид с похожими пропорциями
@@ -1659,12 +1659,12 @@
     // Кракен: реже акул, но хватает кого угодно рядом — хоть рыбу, хоть акулу.
     for (var ki = 0; ki < fishes.length; ki++) {
       var kr = fishes[ki];
-      if (!kr.isKraken || kr.eatenUntil || kr.target || t < kr.calmUntil) continue;
+      if (!kr.isSquid || kr.eatenUntil || kr.target || t < kr.calmUntil) continue;
       if (Math.random() > 0.5) continue;               // не на каждой проверке
       var victim = null, vd = 1e9;
       for (var vj = 0; vj < fishes.length; vj++) {
         var v = fishes[vj];
-        if (v === kr || v.isKraken || v.eatenUntil) continue;
+        if (v === kr || v.isSquid || v.eatenUntil) continue;
         var d = kr.pos.distanceTo(v.pos);
         if (d < vd) { vd = d; victim = v; }
       }

@@ -74,7 +74,9 @@ const SPECIES = [
   { name: 'shark',                  len: 7.6, eye: null,
     titles: { ru: 'Акула',             en: 'Shark',                    pl: 'Rekin' } },
   { name: 'mantaray',               len: 4.6, eye: null,
-    titles: { ru: 'Скат манта',        en: 'Manta ray',                pl: 'Manta' } }
+    titles: { ru: 'Скат манта',        en: 'Manta ray',                pl: 'Manta' } },
+  { name: 'squid',                  len: 9.0, eye: null,
+    titles: { ru: 'Кальмар',           en: 'Squid',                    pl: 'Kałamarnica' } }
 ];
 
 // Имя файла листа: русский лежит по старому адресу, остальные рядом с ним.
