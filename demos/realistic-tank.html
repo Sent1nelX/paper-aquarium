@@ -239,6 +239,10 @@
         <span class="ico">🐟</span>
         <span><b data-t="menu.feed.title"></b><i data-t="menu.feed.sub"></i></span>
       </button>
+      <button class="item" id="m-pred" type="button">
+        <span class="ico">🦈</span>
+        <span><b data-t="menu.pred.title"></b><i id="m-pred-sub"></i></span>
+      </button>
       <button class="item" id="m-print" type="button">
         <span class="ico">🖨️</span>
         <span><b data-t="menu.print.title"></b><i data-t="menu.print.sub"></i></span>
@@ -1679,6 +1683,19 @@
   // акула. «Немного едят» и «иногда дерутся» — невысокие шансы, между делом
   // акула просто плавает. Само движение к цели — в Fish.update.
   var sharkNext = 0;
+  var predatorsOn = true;     // мирный режим (настройка): охота и драки выключены
+  function setPredators(on) {
+    if (on === predatorsOn) return;
+    predatorsOn = on;
+    if (!on) {
+      for (var i = 0; i < fishes.length; i++) {
+        var f = fishes[i];
+        if (f.isShark || f.isSquid) { if (f.directed) clearMark(f); f.target = null; f.directed = false; }
+        if (f.eatenUntil) { f.eatenUntil = 0; f.mesh.visible = true; }   // вернуть «съеденных»
+      }
+    }
+  }
+
   var MIN_PREY_VISIBLE = 4;   // держим минимум мирных рыб в кадре — хищники не выедают всех
   function preyVisible() {
     var n = 0;
@@ -1689,6 +1706,7 @@
     return n;
   }
   function sharkDirector(t) {
+    if (!predatorsOn) return;
     if (t < sharkNext) return;
     sharkNext = t + 2.5 + Math.random() * 3;           // проверка раз в 2.5–5.5с
     // Бюджет охоты на тик: сколько рыб можно увести, не уронив кадр ниже минимума.
@@ -1769,6 +1787,7 @@
     return best;
   }
   function directHunt(fish) {
+    if (!predatorsOn) return;
     var t = clock.elapsedTime, best = null, bd = 1e9;
     for (var i = 0; i < fishes.length; i++) {
       var s = fishes[i];
@@ -1886,6 +1905,7 @@
 
   function applySettings(s) {
     applyBackground(s.backgroundUrl || null);
+    if (typeof s.predators === 'boolean') { setPredators(s.predators); if (typeof refreshPredItem === 'function') refreshPredItem(); }
 
 
     // кормление: сервер отдаёт время последнего нажатия «Покормить»
@@ -2394,6 +2414,21 @@
       .then(function (r) { return r.json(); })
       .then(function (r) { seenFeedAt = r.feedAt; })   // уже покормили, по опросу не повторяем
       .catch(function () { /* без сервера корм всё равно упал */ });
+  };
+
+  // Хищники вкл/выкл: подпись показывает текущее состояние, клик переключает
+  // и сохраняет в настройках (синхронно на всех экранах через SSE).
+  var predSub = document.getElementById('m-pred-sub');
+  function refreshPredItem() {
+    if (predSub) predSub.textContent = predatorsOn ? I18N.t('menu.pred.on') : I18N.t('menu.pred.off');
+  }
+  refreshPredItem();
+  addEventListener('aqua:lang', refreshPredItem);
+  document.getElementById('m-pred').onclick = function () {
+    setPredators(!predatorsOn);
+    refreshPredItem();
+    Tank.send(Tank.api + '/settings', { body: JSON.stringify({ predators: predatorsOn }) })
+      .catch(function () {});
   };
 
   function fishWord(n) {

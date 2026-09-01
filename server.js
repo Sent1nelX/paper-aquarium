@@ -526,7 +526,7 @@ function randomBackground() {
 }
 
 // ── настройки ──────────────────────────────────────────────────────────────
-const DEFAULT_SETTINGS = { background: null };
+const DEFAULT_SETTINGS = { background: null, predators: true };
 
 function readSettings(t) {
   let s;
@@ -817,7 +817,9 @@ function handleTankApi(req, res, t, url) {
       // аквариум пустым, а сохраняет прежнюю картинку.
       const clean = {
         background: (typeof merged.background === 'string' && backgroundUrl(t, merged.background))
-          ? merged.background : cur.background
+          ? merged.background : cur.background,
+        // Хищники: можно выключить (мирный аквариум без охоты и драк).
+        predators: typeof merged.predators === 'boolean' ? merged.predators : (cur.predators !== false)
       };
       writeSettings(t, clean);
       tankNotify(t.id, 'settings');
