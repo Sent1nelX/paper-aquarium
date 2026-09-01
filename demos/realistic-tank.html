@@ -494,6 +494,7 @@
     scene.environment = envRT.texture;
 
     buildLights();
+    initDayNight();
 
     clock = new THREE.Clock();
     addEventListener('resize', onResize);
@@ -707,9 +708,9 @@
     var clone = THREE.SkeletonUtils.clone(spec.gltf.scene);
     var pivot = new THREE.Group();
     pivot.quaternion.copy(spec.info.quat);
-    // Манта: авто-детект «где голова» по толщине тела ошибается на широком
-    // плоском теле — она плыла хвостом вперёд. Доворачиваем на 180° вокруг спины.
-    if (/mantaray/.test(spec.name || '')) {
+    // Манта и кальмар: авто-детект «где голова» по толщине тела ошибается на
+    // их форме — плыли хвостом вперёд. Доворачиваем на 180° вокруг спины.
+    if (/mantaray|squid/.test(spec.name || '')) {
       pivot.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
     }
     pivot.scale.setScalar(spec.info.scale);
@@ -1552,6 +1553,57 @@
     scene.add(fill);
   }
 
+  // ── день/ночь + биолюминесценция ──────────────────────────────────────────
+  // Медленный цикл (~3.5 мин): вечереет — синее наложение поверх сцены гасит
+  // свет, а в воде проступает светящийся планктон. День длиннее ночи.
+  var nightF = 0, nightEl = null, plankton = null;
+  var SPOT_BASE = 3.4, FILL_BASE = 0.35;
+  function glowTexture() {
+    var c = document.createElement('canvas'); c.width = c.height = 64;
+    var g = c.getContext('2d');
+    var rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    rg.addColorStop(0, 'rgba(190,255,240,1)');
+    rg.addColorStop(0.4, 'rgba(120,220,255,0.5)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  }
+  function initDayNight() {
+    // затемнение поверх сцены и фото-фона, но под меню (z<6)
+    nightEl = document.createElement('div');
+    nightEl.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:3;opacity:0;' +
+      'mix-blend-mode:multiply;background:radial-gradient(130% 100% at 50% -10%,#2a5891 0%,#12295a 55%,#060f2c 100%);';
+    document.body.appendChild(nightEl);
+    // планктон — светящиеся точки, видны только ночью
+    var N = 70, pos = new Float32Array(N * 3);
+    for (var i = 0; i < N; i++) {
+      var z = Z_FAR + Math.random() * (Z_NEAR - Z_FAR), lm = limitsAt(z);
+      pos[i * 3] = (Math.random() * 2 - 1) * lm.hw;
+      pos[i * 3 + 1] = lm.yBot + Math.random() * Math.max(1, lm.yTop - lm.yBot);
+      pos[i * 3 + 2] = z;
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    plankton = new THREE.Points(geo, new THREE.PointsMaterial({
+      size: 0.5, map: glowTexture(), transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending, color: 0x8ff0e0
+    }));
+    scene.add(plankton);
+  }
+  function updateDayNight(dt, t) {
+    var cyc = (Math.sin(t * (2 * Math.PI / 210) - 1.4) + 1) / 2;   // 0..1, старт — день
+    var target = Math.max(0, (cyc - 0.55) / 0.45);                 // ночь в верхней части цикла
+    target = target * target * (3 - 2 * target);                   // smoothstep
+    nightF += (target - nightF) * Math.min(1, dt * 2.5);           // плавно, без рывков
+    if (nightEl) nightEl.style.opacity = (nightF * 0.6).toFixed(3);
+    if (spot) spot.intensity = SPOT_BASE * (1 - nightF * 0.55);
+    if (fill) fill.intensity = FILL_BASE * (1 - nightF * 0.5);
+    if (plankton) {
+      plankton.material.opacity = nightF * 0.9;
+      plankton.rotation.y = t * 0.01;
+    }
+  }
+
   // ── снимок для карточки на главной ───────────────────────────────────────
   // Карточка в списке аквариумов показывает не абстрактную иконку, а сам
   // аквариум. Снять его может только сцена — поэтому она сама отправляет
@@ -1775,6 +1827,7 @@
     if (inks.length) updateInks(dt);
     if (marks.length) updateMarks(t);
     ambientBubbles(t);
+    updateDayNight(dt, t);
 
     renderer.render(scene, camera);
 
