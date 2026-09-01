@@ -76,7 +76,13 @@ const SPECIES = [
   { name: 'mantaray',               len: 4.6, eye: null,
     titles: { ru: 'Скат манта',        en: 'Manta ray',                pl: 'Manta' } },
   { name: 'squid',                  len: 9.0, eye: null,
-    titles: { ru: 'Кальмар',           en: 'Squid',                    pl: 'Kałamarnica' } }
+    titles: { ru: 'Кальмар',           en: 'Squid',                    pl: 'Kałamarnica' } },
+  { name: 'turtle',                 len: 3.2, eye: null,
+    titles: { ru: 'Черепаха',          en: 'Sea turtle',               pl: 'Żółw' } },
+  { name: 'jellyfish',              len: 2.6, eye: null,
+    titles: { ru: 'Медуза',            en: 'Jellyfish',                pl: 'Meduza' } },
+  { name: 'seahorse',               len: 1.4, eye: null,
+    titles: { ru: 'Морской конёк',     en: 'Seahorse',                 pl: 'Konik morski' } }
 ];
 
 // Имя файла листа: русский лежит по старому адресу, остальные рядом с ним.

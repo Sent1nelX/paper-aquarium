@@ -25,7 +25,10 @@ const SRC = {
   browntang: '8410757e-6594-4011-817a-633730fbcaf8',
   shark:     'd2d374ea-eb1d-4659-8cc7-816a83b82470',
   mantaray:  '32b4e08e-4605-4356-8bd3-e0cf32335a0f',
-  squid:     '266ac4c8-49f4-4564-b913-1530e16767ea'
+  squid:     '266ac4c8-49f4-4564-b913-1530e16767ea',
+  turtle:    '4a6957fa-543c-4e64-b6cf-7e9d5523026a',
+  jellyfish: '1067b274-0eed-4ccb-adfe-1896d430be00',
+  seahorse:  '4f2c1b38-3bcd-460f-9981-49672bdc1aa0'
 };
 
 function dl(url, dest) {
@@ -61,7 +64,7 @@ function dl(url, dest) {
   const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets/coloring/manifest.json'), 'utf8').replace(/^﻿/, ''));
   const url = (n) => '/assets/models/pack/' + n + '/' + n + '.gltf';
   const bodies = ['clownfish', 'bluetang', 'browntang'];
-  const own = { shark: 'shark', mantaray: 'mantaray', squid: 'squid' };
+  const own = { shark: 'shark', mantaray: 'mantaray', squid: 'squid', turtle: 'turtle', jellyfish: 'jellyfish', seahorse: 'seahorse' };
   const list = m.fish.map((f, i) => ({ name: f.name, title: f.title || f.name, url: url(own[f.name] || bodies[i % bodies.length]) }));
   fs.writeFileSync(path.join(PACK, 'pack.json'), JSON.stringify(list, null, 2));
   fs.writeFileSync(path.join(PACK, 'NOTICE.txt'),
