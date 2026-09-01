@@ -717,9 +717,10 @@
     if (/mantaray|squid/.test(spec.name || '')) {
       pivot.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
     }
-    // Медуза стоит вертикально (купол вверх): её ось тела кладётся в +Z,
-    // доворачиваем в +Y. lookAt для медузы не зовём (у неё свой дрейф).
-    if (/jelly/.test(spec.name || '')) {
+    // Медуза и морской конёк стоят вертикально: ось тела кладётся в +Z,
+    // доворачиваем в +Y. Медузе lookAt не зовём (свой дрейф), коньку — только
+    // курс по горизонтали (yaw), иначе он «ложится» на спину при повороте.
+    if (/jelly|seahorse/.test(spec.name || '')) {
       pivot.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2));
     }
     pivot.scale.setScalar(spec.info.scale);
@@ -812,6 +813,7 @@
     if (this.isSquid) this.speed *= 0.75;      // тяжёлый, движется неспешно
     this.isTurtle = /turtle/.test(this.kind);  // спокойная, неспешная, хищники не трогают
     this.isJelly = /jelly/.test(this.kind);    // дрейфует, пульсирует, светится ночью
+    this.isSeahorse = /seahorse/.test(this.kind);  // плывёт вертикально, поворот только по курсу
     if (this.isTurtle) this.speed *= 0.55;
     // Мелкие мирные рыбки держатся стайкой со своими — сцена оживает косяками.
     this.school = !this.isShark && !this.isSquid && !this.isTurtle && !this.isJelly && this.len < 2.4;
@@ -1038,11 +1040,17 @@
     this.mesh.position.copy(this.pos);
     // Курс сглаживаем: смотрим не на сырую скорость (она дёргается при резкой
     // смене ускорения — паника, границы), а на плавно догоняющее её направление.
-    // Из-за этого рыба поворачивает мягко, а не рвано.
     if (!this._dir) this._dir = this.vel.clone();
     this._dir.lerp(this.vel, Math.min(1, dt * 3.5));
-    if (this._dir.lengthSq() > 1e-4) this.mesh.lookAt(_l.copy(this.pos).add(this._dir));
-    this.mesh.rotation.z += Math.sin(t * 2.5 + this.phase) * 0.015;
+    if (this.isSeahorse) {
+      // Конёк держится вертикально: тело не наклоняем по скорости (иначе «на
+      // спине»), крутим только курс по горизонтали + лёгкое покачивание.
+      var yaw = Math.atan2(this._dir.x, this._dir.z) + Math.PI;
+      this.mesh.rotation.set(Math.sin(t * 1.2 + this.phase) * 0.05, yaw, Math.sin(t * 0.9 + this.phase) * 0.04);
+    } else {
+      if (this._dir.lengthSq() > 1e-4) this.mesh.lookAt(_l.copy(this.pos).add(this._dir));
+      this.mesh.rotation.z += Math.sin(t * 2.5 + this.phase) * 0.015;
+    }
 
     // Крен от драки: удар даёт rollVel, тело кувыркается и выравнивается.
     if (this.rollVel || this.roll) {
