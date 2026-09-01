@@ -1627,9 +1627,22 @@
   // акула. «Немного едят» и «иногда дерутся» — невысокие шансы, между делом
   // акула просто плавает. Само движение к цели — в Fish.update.
   var sharkNext = 0;
+  var MIN_PREY_VISIBLE = 4;   // держим минимум мирных рыб в кадре — хищники не выедают всех
+  function preyVisible() {
+    var n = 0;
+    for (var i = 0; i < fishes.length; i++) {
+      var f = fishes[i];
+      if (!f.isShark && !f.isSquid && !f.eatenUntil && f.mesh.visible) n++;
+    }
+    return n;
+  }
   function sharkDirector(t) {
     if (t < sharkNext) return;
     sharkNext = t + 2.5 + Math.random() * 3;           // проверка раз в 2.5–5.5с
+    // Бюджет охоты на тик: сколько рыб можно увести, не уронив кадр ниже минимума.
+    // Корм на дне разжигает аппетит — при кормлении хищники наглее.
+    var huntBudget = Math.max(0, preyVisible() - MIN_PREY_VISIBLE);
+    var hungry = foods.length ? 0.72 : 0.62;
     var sharks = [];
     for (var i = 0; i < fishes.length; i++) {
       if (fishes[i].isShark && !fishes[i].eatenUntil) sharks.push(fishes[i]);
@@ -1638,7 +1651,7 @@
     sharks.forEach(function (s) {
       if (s.target || t < s.calmUntil) return;
       var r = Math.random();
-      if (r < 0.62) {
+      if (r < hungry && huntBudget > 0) {
         // едят охотно: ближайшая мелкая рыба (крупных и акул не трогает)
         var prey = null, pd = 1e9;
         for (var j = 0; j < fishes.length; j++) {
@@ -1647,7 +1660,7 @@
           var d = s.pos.distanceTo(f.pos);
           if (d < pd) { pd = d; prey = f; }
         }
-        if (prey && pd < 26) { s.target = prey; s.targetKind = 'hunt'; s.targetUntil = t + 9; }
+        if (prey && pd < 26) { s.target = prey; s.targetKind = 'hunt'; s.targetUntil = t + 9; huntBudget--; }
       } else if (r < 0.8 && sharks.length > 1) {
         // иногда дерутся: соперник — другая свободная акула, обоюдно. Дальше
         // всё в Fish.update: кружат, серия выпадов, на третьем расходятся.
@@ -1668,7 +1681,7 @@
     for (var ki = 0; ki < fishes.length; ki++) {
       var kr = fishes[ki];
       if (!kr.isSquid || kr.eatenUntil || kr.target || t < kr.calmUntil) continue;
-      if (Math.random() > 0.5) continue;               // не на каждой проверке
+      if (Math.random() > 0.5 || huntBudget <= 0) continue;   // не на каждой и не выедаем последних
       var victim = null, vd = 1e9;
       for (var vj = 0; vj < fishes.length; vj++) {
         var v = fishes[vj];
@@ -1676,7 +1689,7 @@
         var d = kr.pos.distanceTo(v.pos);
         if (d < vd) { vd = d; victim = v; }
       }
-      if (victim && vd < 22) { kr.target = victim; kr.targetKind = 'hunt'; kr.targetUntil = t + 12; }
+      if (victim && vd < 22) { kr.target = victim; kr.targetKind = 'hunt'; kr.targetUntil = t + 12; huntBudget--; }
     }
   }
 

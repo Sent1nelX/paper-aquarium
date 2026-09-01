@@ -174,8 +174,14 @@ function ensureTank(t) {
 // Важно для meta.json: креш посреди обычного writeFileSync оставил бы битую
 // мету, аквариум потерял бы соль с хешем пароля и стал открытым для всех.
 function writeJsonAtomic(file, data) {
+  writeFileAtomic(file, typeof data === 'string' ? data : JSON.stringify(data));
+}
+
+// Тот же приём для любого файла (в т.ч. бинарного png рыбки): temp + rename,
+// чтобы креш посреди записи не оставил обрубок, который потом не прочитать.
+function writeFileAtomic(file, data) {
   const tmp = file + '.tmp-' + process.pid + '-' + Date.now();
-  fs.writeFileSync(tmp, typeof data === 'string' ? data : JSON.stringify(data));
+  fs.writeFileSync(tmp, data);
   fs.renameSync(tmp, file);
 }
 
@@ -554,6 +560,7 @@ const tankClients = new Map();
 function tankSubscribe(id, res) {
   let set = tankClients.get(id);
   if (!set) { set = new Set(); tankClients.set(id, set); }
+  if (set.size >= 30) return null;   // потолок живых соединений на аквариум
   set.add(res);
   return function () { set.delete(res); if (!set.size) tankClients.delete(id); };
 }
@@ -576,6 +583,8 @@ function handleTankApi(req, res, t, url) {
   // Живой поток событий (SSE): держим соединение и шлём строку на каждое
   // изменение аквариума. Клиент по ней сразу перечитывает рыбок и настройки.
   if (req.method === 'GET' && url === '/events') {
+    const off = tankSubscribe(t.id, res);
+    if (!off) return send(res, 503, '{"error":"слишком много живых соединений"}');
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -583,7 +592,6 @@ function handleTankApi(req, res, t, url) {
       'X-Accel-Buffering': 'no'
     });
     res.write('retry: 3000\n\n');
-    const off = tankSubscribe(t.id, res);
     const ka = setInterval(function () { try { res.write(': ping\n\n'); } catch (e) {} }, 25000);
     req.on('close', function () { clearInterval(ka); off(); });
     return;
@@ -701,10 +709,10 @@ function handleTankApi(req, res, t, url) {
         const model = listPack().find((m) => m.name === data.model);
         if (!model) return send(res, 400, '{"error":"нет такой модели в паке"}');
         ensureTank(t);
-        fs.writeFileSync(path.join(t.fish, fid + '.json'), JSON.stringify({
+        writeJsonAtomic(path.join(t.fish, fid + '.json'), {
           id: fid, type: 'pack', model: model.name, title: model.title,
           created: new Date().toISOString()
-        }));
+        });
         console.log(`+ рыбка из пака ${model.name} в ${t.id} — всего ${listFish(t).length}`);
         tankNotify(t.id, 'fish');
         return send(res, 200, JSON.stringify({ ok: true, id: fid }));
@@ -718,10 +726,10 @@ function handleTankApi(req, res, t, url) {
       }
       ensureTank(t);
       const png = Buffer.from(data.texture.split(',')[1], 'base64');
-      fs.writeFileSync(path.join(t.fish, fid + '.png'), png);
-      fs.writeFileSync(path.join(t.fish, fid + '.json'), JSON.stringify({
+      writeFileAtomic(path.join(t.fish, fid + '.png'), png);
+      writeJsonAtomic(path.join(t.fish, fid + '.json'), {
         id: fid, kind: String(data.kind), created: new Date().toISOString()
-      }));
+      });
       console.log(`+ рыбка ${data.kind} в ${t.id} (${Math.round(png.length / 1024)} КБ) — всего ${listFish(t).length}`);
       tankNotify(t.id, 'fish');
       send(res, 200, JSON.stringify({ ok: true, id: fid }));
